@@ -4,37 +4,394 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>STARK LAB — Ultimate HUD Predictor (v3)</title>
-  <meta name="description" content="Ultra-futuristic Tony-Stark-style HUD. Uses platform authenticator (fingerprint) locally to unlock playful future predictions. Run on HTTPS or localhost.">
+  <title>STARK LAB — Multi-User HUD Predictor (Local)</title>
+  <meta name="description" content="Tony-Stark style futuristic HUD with multi-user support (local IndexedDB). Uses WebAuthn platform authenticator. Run on HTTPS / localhost.">
   <style>
-    /* ======================================================================
-       STARK LAB HUD (v3)
-       - Purpose: Tony Stark style futuristic UI
-       - Notes: All biometric interactions use WebAuthn platform authenticator
-       - This CSS focuses on neon-glow, glass panels, hologram canvas, and
-         cinematic spacing so it *looks* like a lab HUD.
-       ====================================================================== */:root{
-  --bg-1:#020312;      /* outer space black */
-  --bg-2:#071229;      /* deep navy */
-  --glass: rgba(255,255,255,0.04);
-  --accent1: #00ffd1;  /* aqua neon */
-  --accent2: #00b7ff;  /* electric blue */
-  --accent3: #ffd166;  /* warm highlight */
-  --muted: #9fb3c0;
-  --card: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
-  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;
-  --radius: 14px;
+    /* ==================================================================
+       STARK LAB — Multi-User HUD (Local IndexedDB)
+       - Multi-user local demo using WebAuthn platform authenticator
+       - Stores users, credentials, and histories in IndexedDB (browser-only)
+       - No biometric data or private keys leave device. Demonstration only.
+       ================================================================== */:root{
+  --bg-1:#03061a; --bg-2:#071229; --accent-a:#00ffd1; --accent-b:#00b7ff; --muted:#9fb3c0; --glass:rgba(255,255,255,0.04); --radius:14px; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;
 }
+html,body{height:100%;margin:0;background:radial-gradient(circle at 12% 12%, rgba(0,183,255,0.02), transparent 6%), linear-gradient(180deg,var(--bg-1),var(--bg-2));font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#e6fbff}
 
-html,body{height:100%;margin:0;background:radial-gradient(circle at 10% 10%, rgba(0,183,255,0.02), transparent 8%), linear-gradient(180deg,var(--bg-1),var(--bg-2));font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#e6fbff}
-
-/* layout */
-.app{max-width:1180px;margin:18px auto;padding:18px;display:grid;grid-template-columns:380px 1fr;gap:18px}
-
-.panel{background:var(--card);border-radius:var(--radius);padding:14px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 8px 60px rgba(0,183,255,0.04)}
+.wrap{max-width:1200px;margin:18px auto;padding:18px;display:grid;grid-template-columns:360px 1fr;gap:18px}
+.panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border-radius:var(--radius);padding:14px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 60px rgba(0,183,255,0.04)}
 
 header{display:flex;gap:12px;align-items:center}
-.logo{width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,#00131b,#00283a);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 60px rgba(0,183,255,0.06)}
+.logo{width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,#00131b,#00283a);display:flex;align-items:center;justify-content:center}
+h1{margin:0;font-size:18px}
+.lead{color:var(--muted);margin-top:4px;font-size:13px}
+
+/* left column controls */
+.stack{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.row{display:flex;gap:8px;align-items:center}
+button{padding:10px 12px;border-radius:10px;border:0;background:transparent;color:var(--accent-a);font-weight:800;cursor:pointer}
+.primary{background:linear-gradient(90deg,var(--accent-a),var(--accent-b));color:#00121a;box-shadow:0 8px 40px rgba(0,183,255,0.12)}
+.ghost{border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+
+/* user list */
+.users{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto}
+.user-card{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02)}
+.user-name{font-weight:800}
+
+/* HUD area */
+.hud{position:relative;height:420px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(0,12,20,0.4), rgba(0,0,0,0.18))}
+canvas{position:absolute;inset:0}
+.surface{position:relative;z-index:5;text-align:center;padding:18px}
+.pred{min-width:320px;border-radius:12px;padding:16px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border:1px solid rgba(0,183,255,0.06)}
+.pred h2{margin:0;font-size:18px}
+.muted{color:var(--muted)}
+
+/* right column */
+.console{min-height:140px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.01);overflow:auto}
+.history{max-height:380px;overflow:auto;margin-top:8px;display:flex;flex-direction:column;gap:10px}
+.hist-item{padding:10px;border-radius:8px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02)}
+
+input[type=text],select,input[type=range]{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px;color:var(--accent-a)}
+label{font-size:13px;color:var(--muted)}
+footer{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:12px}
+
+@media(max-width:980px){.wrap{grid-template-columns:1fr}.hud{height:300px}}
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- LEFT: user management + controls -->
+    <div class="panel">
+      <header>
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 80 80" width="56" height="56" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#00ffd1"/><stop offset="1" stop-color="#00b7ff"/></linearGradient></defs><circle cx="40" cy="40" r="34" stroke="url(#g1)" stroke-width="2" fill="rgba(0,0,0,0.12)"/></svg>
+        </div>
+        <div>
+          <h1>STARK LAB — Multi-User</h1>
+          <div class="lead">Register multiple users locally. Fingerprint unlock identifies user profile.</div>
+        </div>
+      </header><div class="stack">
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="newUserName" type="text" placeholder="New user name" style="flex:1">
+      <button id="btnRegisterUser" class="primary">ADD & REGISTER</button>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="btnListCreds" class="ghost">REFRESH USERS</button>
+      <button id="btnExportAll" class="ghost">EXPORT ALL</button>
+    </div>
+
+    <div style="font-weight:800;color:var(--muted)">Registered Users</div>
+    <div id="users" class="users"></div>
+
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+      <button id="btnAuthAny" class="primary">AUTHENTICATE (ANY USER)</button>
+      <button id="btnAuthChoose" class="ghost">AUTHENTICATE AS...</button>
+    </div>
+
+    <div style="color:var(--muted);font-size:13px">Note: This demo stores credential ids and user profiles in browser IndexedDB. No sensitive biometric data leaves your device.</div>
+  </div>
+</div>
+
+<!-- CENTER RIGHT: HUD + history per active user -->
+<div class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <h2 id="activeUser">No user active</h2>
+      <div class="muted" id="activeMeta">Authenticate a user to see personalized HUD and history.</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="muted">Status</div>
+      <div id="status" class="mono">idle</div>
+    </div>
+  </div>
+
+  <div style="margin-top:12px" class="hud" id="viewer">
+    <canvas id="holoCanvas"></canvas>
+    <div class="surface">
+      <div class="pred" id="predCard">
+        <h2 id="predText">Awaiting user authentication...</h2>
+        <div class="muted" id="predDetail">No active prediction</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+    <label style="width:90px">Category</label>
+    <select id="selCat">
+      <option value="general">General</option>
+      <option value="study">Study</option>
+      <option value="finance">Finance</option>
+      <option value="love">Relationships</option>
+      <option value="creative">Creative</option>
+      <option value="travel">Travel</option>
+      <option value="weird">Weird</option>
+    </select>
+
+    <label style="width:80px">Intensity</label>
+    <input id="selInt" type="range" min="1" max="10" value="6">
+    <div id="selIntVal" class="mono">6</div>
+  </div>
+
+  <div style="margin-top:12px">
+    <div style="font-weight:800;margin-bottom:6px">Active user history</div>
+    <div id="history" class="history"></div>
+  </div>
+
+  <footer>
+    <div>© STARK LAB — Local Multi-User Demo</div>
+    <div class="muted">Run on HTTPS or localhost for platform authenticator support</div>
+  </footer>
+</div>
+
+  </div><script>
+/* ======================================================================
+   STARK LAB Multi-User — JS
+   Overview:
+   - IndexedDB stores: users store with {id (auto), name, credId (base64), createdAt}
+   - History store with per-user predictions
+   - WebAuthn: register per-user -> store credential id to identify user
+   - Authenticate: Request allowCredentials for stored credIds (any user) or a specific user's credId
+   - After assertion, map returned rawId to stored user to set active user
+   ====================================================================== */
+
+// ---------- IndexedDB small wrapper -------------------------------------
+const DB_NAME = 'stark_multi_v1';
+const DB_VERSION = 1;
+let db = null;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const idb = e.target.result;
+      if(!idb.objectStoreNames.contains('users')){
+        const store = idb.createObjectStore('users', { keyPath: 'id', autoIncrement: true });
+        store.createIndex('credId', 'credId', { unique: true });
+      }
+      if(!idb.objectStoreNames.contains('history')){
+        const h = idb.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
+        h.createIndex('userId', 'userId', { });
+        h.createIndex('ts', 'ts', { });
+      }
+    };
+    req.onsuccess = () => { db = req.result; resolve(db); };
+    req.onerror = (e) => { reject(e); };
+  });
+}
+
+function addUserRecord(user){
+  return new Promise((res, rej)=>{
+    const tx = db.transaction('users','readwrite');
+    const store = tx.objectStore('users');
+    const r = store.add(user);
+    r.onsuccess = () => res(r.result);
+    r.onerror = (e) => rej(e);
+  });
+}
+
+function putUserRecord(user){
+  return new Promise((res, rej)=>{
+    const tx = db.transaction('users','readwrite');
+    const store = tx.objectStore('users');
+    const r = store.put(user);
+    r.onsuccess = () => res(r.result);
+    r.onerror = (e) => rej(e);
+  });
+}
+
+function getAllUsers(){
+  return new Promise((res, rej)=>{
+    const tx = db.transaction('users','readonly');
+    const store = tx.objectStore('users');
+    const r = store.getAll();
+    r.onsuccess = () => res(r.result);
+    r.onerror = (e) => rej(e);
+  });
+}
+
+function findUserByCredId(credBase64){
+  return new Promise((res, rej)=>{
+    const tx = db.transaction('users','readonly');
+    const store = tx.objectStore('users');
+    const idx = store.index('credId');
+    const r = idx.get(credBase64);
+    r.onsuccess = () => res(r.result);
+    r.onerror = (e) => rej(e);
+  });
+}
+
+function addHistory(item){
+  return new Promise((res, rej)=>{
+    const tx = db.transaction('history','readwrite');
+    const store = tx.objectStore('history');
+    const r = store.add(item);
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = (e)=>rej(e);
+  });
+}
+
+function getHistoryForUser(userId){
+  return new Promise((res, rej)=>{
+    const tx = db.transaction('history','readonly');
+    const store = tx.objectStore('history');
+    const idx = store.index('userId');
+    const r = idx.getAll(IDBKeyRange.only(userId));
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = (e)=>rej(e);
+  });
+}
+
+function deleteUser(id){
+  return new Promise((res, rej)=>{
+    const tx = db.transaction('users','readwrite');
+    const store = tx.objectStore('users');
+    const r = store.delete(id);
+    r.onsuccess = ()=>res(); r.onerror=(e)=>rej(e);
+  });
+}
+
+// ---------- WebAuthn helpers --------------------------------------------
+function bufToBase64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function base64ToBuf(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)); }
+
+async function isPlatformAvailable(){
+  return (window.PublicKeyCredential !== undefined) && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+}
+
+// ---------- UI refs -----------------------------------------------------
+const newUserName = document.getElementById('newUserName');
+const btnRegisterUser = document.getElementById('btnRegisterUser');
+const usersEl = document.getElementById('users');
+const btnListCreds = document.getElementById('btnListCreds');
+const btnExportAll = document.getElementById('btnExportAll');
+const btnAuthAny = document.getElementById('btnAuthAny');
+const btnAuthChoose = document.getElementById('btnAuthChoose');
+
+const activeUserEl = document.getElementById('activeUser');
+const activeMetaEl = document.getElementById('activeMeta');
+const statusEl = document.getElementById('status');
+const predText = document.getElementById('predText');
+const predDetail = document.getElementById('predDetail');
+const historyEl = document.getElementById('history');
+const selCat = document.getElementById('selCat');
+const selInt = document.getElementById('selInt');
+const selIntVal = document.getElementById('selIntVal');
+
+const holoCanvas = document.getElementById('holoCanvas');
+
+// state
+let activeUser = null; // {id, name, credId, createdAt}
+let allUsers = [];
+
+// ---------- prediction bank & tone -------------------------------------
+const BANK = {
+  general: ['A pleasant surprise is closer than you think.','A small idea grows into an advantage.','Someone notices your attention to detail.','A tiny win becomes a stepping stone.'],
+  study: ['One solved problem will unlock more.','Consistent notes make revision effortless.','Teach a peer; your understanding deepens.'],
+  finance: ['Small budget tweaks will add up quickly.','Delay a purchase one day — clarity returns.','An opportunity to save appears soon.'],
+  love: ['A shared laugh creates a memory.','Honesty simplifies conversation.','Small gestures matter.'],
+  creative: ['Combine two hobbies for a spark.','A rough draft leads to a better solution.'],
+  travel: ['A short trip refreshes perspective.','Unplanned detours become favorites.'],
+  weird: ['You will find something oddly satisfying today.','A funny coincidence nudges a decision.']
+};
+const TONES = { optimistic: s=>s, realistic: s=>s.replace(/will/gi,'may'), mysterious: s=>s+' — patterns reveal slowly.', funny: s=>'Note: '+s.toLowerCase()+' 😂' };
+
+function choosePrediction(cat,intensity,tone){
+  const pool = BANK[cat] || BANK.general; const idxBase = Math.floor((intensity/10)*(pool.length-1)); const noise = Math.floor(Math.random()*Math.min(3,pool.length)); const pick = pool[Math.min(pool.length-1, idxBase + noise)]; return (TONES[tone]||TONES.optimistic)(pick);
+}
+
+// ---------- rendering users --------------------------------------------
+function renderUsers(list){ usersEl.innerHTML=''; if(list.length===0){ usersEl.innerHTML='<div class="muted">No users yet. Add one above and register via platform sensor.</div>'; return; } for(const u of list){ const card = document.createElement('div'); card.className='user-card'; card.innerHTML = `<div><div class="user-name">${escapeHtml(u.name)}</div><div class="muted">registered: ${new Date(u.createdAt).toLocaleString()}</div></div><div style="display:flex;gap:6px"><button data-id="${u.id}" class="btn btnAuth">Auth</button><button data-id="${u.id}" class="btn ghost btnDel">Del</button></div>`; usersEl.appendChild(card); } // wire
+  usersEl.querySelectorAll('.btnAuth').forEach(b=>b.addEventListener('click',()=>authAsUser(Number(b.dataset.id))));
+  usersEl.querySelectorAll('.btnDel').forEach(b=>b.addEventListener('click',()=>deleteUserConfirm(Number(b.dataset.id))));
+}
+
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ---------- register user + WebAuthn -------------------------------
+btnRegisterUser.addEventListener('click', async ()=>{
+  const name = newUserName.value.trim(); if(!name){ alert('Enter a user name'); return; }
+  const ok = await isPlatformAvailable(); if(!ok){ alert('Platform authenticator not available (use HTTPS/localhost)'); return; }
+
+  // prepare publicKey options (demo: challenge & user id generated locally)
+  const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+  const userId = window.crypto.getRandomValues(new Uint8Array(16));
+  const publicKey = {
+    challenge: challenge.buffer,
+    rp: { name: 'STARK Multi-User Demo' },
+    user: { id: userId, name: name, displayName: name },
+    pubKeyCredParams: [{ alg: -7, type:'public-key' }],
+    timeout: 60000,
+    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+    attestation: 'none'
+  };
+
+  try{
+    statusEl.textContent = 'Creating credential — touch sensor';
+    const cred = await navigator.credentials.create({ publicKey });
+    if(!cred){ statusEl.textContent='Creation cancelled'; return; }
+    const rawId = new Uint8Array(cred.rawId);
+    const credB64 = bufToBase64(rawId);
+
+    // store user record in IndexedDB
+    const user = { name, credId: credB64, createdAt: Date.now() };
+    const id = await addUserRecord(user);
+    user.id = id;
+    allUsers.push(user);
+    renderUsers(allUsers);
+    newUserName.value='';
+    statusEl.textContent = `User ${name} registered (id ${id})`;
+    log(`Registered user ${name}`);
+  }catch(e){ console.error(e); statusEl.textContent='Create failed'; alert('Register error: '+(e.message||e)); }
+});
+
+// ---------- authenticate (any user) ----------------------------------
+btnAuthAny.addEventListener('click', async ()=>{ await authenticateAny(); });
+
+async function authenticateAny(){
+  try{
+    const ok = await isPlatformAvailable(); if(!ok){ alert('Platform authenticator not available'); return; }
+    const users = await getAllUsers(); if(users.length===0){ alert('No registered users'); return; }
+    // prepare allowCredentials for all stored cred ids
+    const allow = users.map(u=>({ id: base64ToBuf(u.credId).buffer, type:'public-key' }));
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    const publicKey = { challenge: challenge.buffer, timeout:60000, allowCredentials: allow, userVerification:'required' };
+    statusEl.textContent = 'Touch sensor to authenticate (any user)';
+    const assertion = await navigator.credentials.get({ publicKey });
+    if(!assertion){ statusEl.textContent='Auth cancelled'; return; }
+    const rawId = new Uint8Array(assertion.rawId);
+    const b64 = bufToBase64(rawId);
+    const user = await findUserByCredId(b64);
+    if(!user){ statusEl.textContent='Unknown credential'; alert('Authenticated but user not found locally'); return; }
+    setActiveUser(user);
+    statusEl.textContent = `Authenticated: ${user.name}`;
+    log(`Authenticated as ${user.name}`);
+  }catch(e){ console.error(e); statusEl.textContent='Auth failed'; alert('Auth error: '+(e.message||e)); }
+}
+
+// authenticate as a specific user by id (button by user)
+async function authAsUser(userId){
+  try{
+    const user = allUsers.find(u=>u.id===userId); if(!user){ alert('User not found'); return; }
+    const ok = await isPlatformAvailable(); if(!ok){ alert('Platform authenticator not available'); return; }
+    const allow = [{ id: base64ToBuf(user.credId).buffer, type:'public-key' }];
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    const publicKey = { challenge:challenge.buffer, timeout:60000, allowCredentials:allow, userVerification:'required' };
+    statusEl.textContent = `Touch sensor to authenticate as ${user.name}`;
+    const assertion = await navigator.credentials.get({ publicKey });
+    if(!assertion){ statusEl.textContent='Auth cancelled'; return; }
+    // find user by cred id (should be same)
+    const rawId = new Uint8Array(assertion.rawId); const b64 = bufToBase64(rawId);
+    const u = await findUserByCredId(b64);
+    if(!u){ alert('User not found after assertion'); return; }
+    setActiveUser(u); statusEl.textContent = `Authenticated: ${u.name}`; log(`Authenticated as ${u.name}`);
+  }catch(e){ console.error(e); alert('Auth error: '+(e.message||e)); }
+}
+
+// ---------- set active user and load history -------------------------
+async function setActiveUser(user){ activeUser = user; activeUserEl.textContent = user.name; activeMetaEl.textContent = `Registered: ${new Date(user.createdAt).toLocaleString()}`; await loadHistoryForActive(); }
+
+async function loadHistoryForActive(){ historyEl.innerHTML=''; if(!activeUser){ historyEl.innerHTML='<div class="muted">No active user</div>'; return; } const items = await getHistoryForUser(activeUser.id) || []; if(items.length===0){ historyEl.innerHTML='<div class="muted">No history yet for this user.<.logo{width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,#00131b,#00283a);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 60px rgba(0,183,255,0.06)}
 
 h1{margin:0;font-size:18px}
 .lead{color:var(--muted);margin:4px 0 0;font-size:13px}
