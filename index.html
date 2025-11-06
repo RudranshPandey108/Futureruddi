@@ -138,3 +138,106 @@ clearBtn.addEventListener('click', ()=>{ localStorage.removeItem('demo_cred_id')
 })();
 </script></body>
 </html>
+  </div><script>
+// Utility: convert base64 to ArrayBuffer and vice-versa
+function bufToBase64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function base64ToBuf(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)); }
+
+const registerBtn = document.getElementById('registerBtn');
+const authBtn = document.getElementById('authBtn');
+const clearBtn = document.getElementById('clearBtn');
+const status = document.getElementById('status');
+const predictionBox = document.getElementById('prediction');
+const result = document.getElementById('result');
+
+const PREDICTIONS = [
+  "A pleasant surprise is coming soon.",
+  "Focus on studies — opportunity to rise.",
+  "Someone from your past will reconnect.",
+  "A small financial gain arrives this month.",
+  "Take a short trip; you'll feel refreshed.",
+  "A creative idea will open a door for you.",
+  "Patience now — reward after a little wait.",
+  "New friend will bring unexpected help."
+];
+
+function rndPrediction(){ return PREDICTIONS[Math.floor(Math.random()*PREDICTIONS.length)]; }
+
+async function isWebAuthnAvailable(){
+  return (window.PublicKeyCredential !== undefined) && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+}
+
+async function registerCredential(){
+  try{
+    const avail = await isWebAuthnAvailable();
+    if(!avail){ status.textContent = 'Platform authenticator not available on this device/browser.'; return; }
+
+    // Create a dummy challenge and user id for demo purposes (in production, server provides these)
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    const userId = window.crypto.getRandomValues(new Uint8Array(16));
+
+    const publicKey = {
+      challenge: challenge.buffer,
+      rp: { name: 'Fingerprint Predictor Demo' },
+      user: { id: userId, name: 'demo-user', displayName: 'Demo User' },
+      pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+      timeout: 60000,
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      attestation: 'none'
+    };
+
+    status.textContent = 'Touch your fingerprint sensor to create credential...';
+    const cred = await navigator.credentials.create({ publicKey });
+    if(!cred){ status.textContent = 'Credential creation was not completed.'; return; }
+
+    // Save credential id locally (base64) — in real apps, send to server
+    const rawId = new Uint8Array(cred.rawId);
+    localStorage.setItem('demo_cred_id', bufToBase64(rawId));
+    status.textContent = 'Registered credential successfully — now use Authenticate.';
+  }catch(err){ console.error(err); status.textContent = 'Register failed: ' + (err.message || err); }
+}
+
+async function authenticate(){
+  try{
+    const avail = await isWebAuthnAvailable();
+    if(!avail){ status.textContent = 'Platform authenticator not available.'; return; }
+
+    const credB64 = localStorage.getItem('demo_cred_id');
+    if(!credB64){ status.textContent = 'No credential found. Please Register first.'; return; }
+
+    const allowCred = [{ id: base64ToBuf(credB64).buffer, type: 'public-key' }];
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+
+    const publicKey = {
+      challenge: challenge.buffer,
+      timeout: 60000,
+      allowCredentials: allowCred,
+      userVerification: 'required'
+    };
+
+    status.textContent = 'Touch your fingerprint sensor to authenticate...';
+    const assertion = await navigator.credentials.get({ publicKey });
+    if(!assertion){ status.textContent = 'Authentication cancelled.'; return; }
+
+    // For demo we don't verify the assertion with a server. We only use success to show a prediction.
+    status.textContent = 'Authentication successful.';
+    showPrediction();
+  }catch(err){ console.error(err); status.textContent = 'Authentication failed: ' + (err.message || err); }
+}
+
+function showPrediction(){
+  predictionBox.hidden = false;
+  result.textContent = rndPrediction();
+}
+
+registerBtn.addEventListener('click', registerCredential);
+authBtn.addEventListener('click', authenticate);
+clearBtn.addEventListener('click', ()=>{ localStorage.removeItem('demo_cred_id'); status.textContent = 'Cleared stored demo credential.'; predictionBox.hidden = true; result.textContent=''; });
+
+// quick autodetect
+(async ()=>{
+  const avail = await (window.PublicKeyCredential ? PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable() : Promise.resolve(false));
+  if(!avail) status.textContent = 'Note: platform authenticator not available or unsupported (requires modern mobile browser & HTTPS).';
+})();
+</script></body>
+</html>
